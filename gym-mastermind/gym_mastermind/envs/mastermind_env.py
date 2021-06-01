@@ -3,13 +3,14 @@ from collections import Counter
 import logging
 import random
 import copy
+import os
+import itertools
 
 import numpy as np
 import gym
 from gym.utils import seeding
 from gym import spaces
 from matplotlib import pyplot as plt
-import itertools
 logger = logging.getLogger(__name__)
 
 class MastermindEnv(gym.Env):
@@ -30,22 +31,16 @@ class MastermindEnv(gym.Env):
     'self.GUESS_MAX' steps have been taken.
     """
 
-
     """ # TODO:
-    - porządkowanie kodu
-    - dodaj liczbę pkt za pegi
-    - dodaj obliczany próg random nagrody: 1/ilość dostępnych kombinacji * nagroda max, ale z ujemną wartością to chyba będzie inaczej wyglądać, przemyśl
-    daj ujemną nagrodę za wypróbowanie kombinacji która już była w tym epizodzie (wymaga window_length o wielkości epizodu)
-    - sprobuj mniejsze kody, 3 digits moze
-    - sprobuj dodac numer aktualnego guessu do obs
-    - daj mu w obserwacje aktualny numer guessa i zwiększaj negatywną nagrodę za każdy kolejny guess:
+    - dodaj obliczany próg random nagrody: 1/ilość dostępnych kombinacji * nagroda max, ale z ujemną
+    wartością to chyba będzie inaczej wyglądać, przemyśl
+    - zwiększaj negatywną nagrodę za każdy kolejny guess:
     1:1 2:2 3:3 4:4 5:5 6:6 7:7
-
     """
 
     VALUES = 4
-    SIZE = 3  # 3 or 4
-    GUESS_MAX = 7
+    SIZE = 4  # 3 or 4
+    GUESS_MAX = 8
     def __init__(self):
         self.target = None
         self.guess_count = None
@@ -56,8 +51,6 @@ class MastermindEnv(gym.Env):
         for i in range(self.amount_of_recent_rewards_in_history):
             self.recent_mean_rewards_history.append(0)
         self.guesses_list = []
-        self.co_ile_steps_wykres_nagrod = 5000
-        self.co_ile_steps_wykres_akcji = 30000
         self.actions_tried_this_epizode = []
 
         self.feedback_pegs_to_binary_dict = self.generate_feedback_pegs_to_binary_dict()
@@ -77,16 +70,16 @@ class MastermindEnv(gym.Env):
 
 
         self.obs_low = []
-        #self.obs_low.append(0)  # current step
-        """for slot in range(self.number_of_digits_in_action):
-            self.obs_low.append(0)"""
+        self.obs_low.append(0)  # current step
+        for slot in range(self.number_of_digits_in_action):
+            self.obs_low.append(0)
         for peg in range(self.amount_of_possible_binary_feedback_pegs):
             self.obs_low.append(0)
         #print(self.obs_low)
         self.obs_high = []
-        #self.obs_high.append(self.GUESS_MAX)  # current step
-        """for slot in range(self.number_of_digits_in_action):
-            self.obs_high.append(1)"""
+        self.obs_high.append(self.GUESS_MAX)  # current step
+        for slot in range(self.number_of_digits_in_action):
+            self.obs_high.append(1)
         for peg in range(self.amount_of_possible_binary_feedback_pegs):
             self.obs_high.append(1)
         #print(self.obs_high)
@@ -103,13 +96,41 @@ class MastermindEnv(gym.Env):
         #print("action_high;", self.action_high)
         self.action_space = spaces.Box(low=np.array(self.action_low), high=np.array(self.action_high), dtype=np.int)
         self.seed()
+
+        self.testing = 0
+        self.nr_of_test_epizode = 0
+        self.test_log = {}
+        self.test_guesses_list = []
+
         self.reset()
         self.counter = -1
         self.interval = 0
         self.actions_list = []
 
+
     def generate_code(self):
-        return [random.randint(0, self.VALUES-1) for _ in range(self.SIZE)]
+        if self.nr_of_test_epizode == len(self.possible_codes):
+            self.testing = 0
+            print("\n\n\n\n\n\n\n\n\n\n")
+            for i in self.test_log:
+                print(i, ":", self.test_log[i])
+            print("\n\n\n\n\n\n\n\n\n\n")
+
+        if self.testing == 1:
+            counter = 0
+            for i in range(200000):
+                counter += 3
+                counter -= 3
+            counter = 0
+
+            code = []
+            for i in self.possible_codes[self.nr_of_test_epizode]:
+                if i != " ":
+                    code.append(int(i))
+            self.nr_of_test_epizode  += 1
+            return code
+        else:
+            return [random.randint(0, self.VALUES-1) for _ in range(self.SIZE)]
 
     def generate_possible_codes_dict(self, possible_codes):
         # WORKS ONLY FOR BINARY CODES  # TODO EXPAND IT TO MORE VALUES
@@ -185,9 +206,16 @@ class MastermindEnv(gym.Env):
             for j in pegs_to_binary_dict:
                 if Counter(j) == Counter(i):
                     new_pegs_to_binary_dict[i] = pegs_to_binary_dict[j]
+
         # Merging dicts
-        ready_feedback_pegs_combinations_dict = {**new_pegs_to_binary_dict, **pegs_to_binary_dict}
-        return ready_feedback_pegs_combinations_dict
+        # TODO: yyyy chyba starcza sam 'new_pegs_to_binary_dict', po co jest reszta skoro on zawiera w sobie pegs_to_binary_dict? czytaj \/
+        # zahashowałem ten zmergowany dict, skoro to ten sam /\
+        # ready_feedback_pegs_combinations_dict = {**new_pegs_to_binary_dict, **pegs_to_binary_dict}
+        print(pegs_to_binary_dict)
+        print("\n\n\n", new_pegs_to_binary_dict)
+        # print("\n\n\n", ready_feedback_pegs_combinations_dict)
+        # return ready_feedback_pegs_combinations_dict
+        return new_pegs_to_binary_dict
 
     def encode_feedback_pegs_as_binary(self, feedback_pegs):
         feedback_pegs_str = ""
@@ -207,41 +235,29 @@ class MastermindEnv(gym.Env):
         n_white = sum(min(g_count, a_counter[k]) for k, g_count in g_counter.items())
         return tuple([0] * (self.SIZE - n_correct - n_white) + [1] * n_white + [2] * n_correct)
 
-    """def shift_observation_to_the_right(self, observation):
-        # przesuwanie pozycji w obserwacji w prawo żeby zrobić miejsce na nową obserwację
-        shifted_observation = observation
-        for i in range((self.SIZE*self.VALUES)+(self.SIZE*self.chyba_trzy_a_nie_dwa)):
-            for j in range(len(shifted_observation)-1, -1, -1):
-                if j != 0:
-                    shifted_observation[j] = shifted_observation[j-1]
-                else:
-                    shifted_observation[j] = 0
-        return shifted_observation"""
-
     def insert_new_step_to_the_observation(self, observation, feedback_pegs_binary, action_discretized):
         updated_observation = observation
-        # umieszczanie obserwacji na jej miejscu
-        for i in range(len(feedback_pegs_binary)):
-            """updated_observation[self.number_of_digits_in_action+i] = feedback_pegs_binary[i]"""
-            updated_observation[i] = feedback_pegs_binary[i]
-
-        """# dodawanie akcji do obserwacji:
+        # dodawanie numeru aktualnego kroku do obserwacji:
+        updated_observation[0] = self.guess_count
+        # dodawanie akcji do obserwacji:
         for i in range(len(action_discretized)):
-            updated_observation[i] = action_discretized[i]"""
-        #updated_observation[0] = self.guess_count
+            updated_observation[i+1] = action_discretized[i]
+        # dodawanie feedback pegów do obserwacji:
+        for i in range(len(feedback_pegs_binary)):
+            updated_observation[len(action_discretized)+i+1] = int(feedback_pegs_binary[i])
         return updated_observation
 
     def get_observation(self, action, action_discretized):
         feedback_pegs = self.calculate_feedback_pegs(action)
         feedback_pegs_binary = self.encode_feedback_pegs_as_binary(feedback_pegs)
-        print("---   BINARY PEGS:", feedback_pegs_binary, ", PEGS:", feedback_pegs)
+        ## #print("---   BINARY PEGS:", feedback_pegs_binary, "  PEGS:", feedback_pegs)
 
         #self.observation = self.shift_observation_to_the_right(self.observation)
         self.observation  = self.insert_new_step_to_the_observation(self.observation,
                                                                     feedback_pegs_binary,
                                                                     action_discretized)
-        print("-   OBSERVATION:", self.observation, "\n")
-        return self.observation, feedback_pegs
+        ## #print("\n-   OBSERVATION:", self.observation)
+        return self.observation
 
     def decimalToBinary(self, n):
         return bin(n).replace("0b", "")
@@ -266,7 +282,7 @@ class MastermindEnv(gym.Env):
         self.guess_count += 1
         action = list(action)
         #print("---------   GUESS " + str(self.guess_count) + ":")
-        print("-------   original ddpg action:", [round(i, 2) for i in action])
+        #print("-------   original ddpg action:", [round(i, 2) for i in action])
 
         action_discretized = self.discretize_action(action)
 
@@ -276,71 +292,84 @@ class MastermindEnv(gym.Env):
         action = action_discretized_str
         #print("-----   BINARY ACTION: " + '\'' + str(action) + '\'')
         action = self.possible_codes_dict[action]
-        print("----   ACTION:", action)
-
-        """self.actions_list.extend([action[0], action[1]])
-        if self.counter % self.co_ile_steps_wykres_akcji == 0:
-            plt.hist(self.actions_list, alpha=0.6)
-            plt.title('częstości akcji')
-            plt.show()"""
+        ## #print("----   ACTION:", action)
 
         # check if the agent guessed at first try; if yes, change the code
-        if self.guess_count == 1 and action == self.target:
-            new_target = self.generate_code()
-            while self.target == new_target:
+        if self.testing == 0:
+            if self.guess_count == 1 and action == self.target:
                 new_target = self.generate_code()
-            self.target = new_target
-            print("############# ZMIANA TARGETU NA:", self.target)
+                while self.target == new_target:
+                    new_target = self.generate_code()
+                self.target = new_target
+                ## #print("############# ZMIANA TARGETU NA:", self.target)
 
         # check if agent guessed the code
         done = action == self.target or self.guess_count >= self.GUESS_MAX
         if done:
             if action == self.target:
-                reward = 75
-                print("\n\nZgadnięte!\n\n\n")
+                reward = 100
+                ## #print("\n\nZgadnięte!\n\n\n")
             else:
-                reward = -20
+                reward = -12
         else:
-            reward = -2
+            reward = -1
 
-        self.draw_rewards_history(reward)
-        self.observation, feedback_pegs = self.get_observation(action, action_discretized)
+        self.observation = self.get_observation(action, action_discretized)
         if action in self.actions_tried_this_epizode:
             reward += -5
         self.actions_tried_this_epizode.append(action)
+
+        self.push_reward_to_list(reward)
+        if os.path.exists("C:\\Users\Bartek\\Desktop\\gyms\\gym-mastermind\\gym_mastermind\\envs\\generate_graph_Y.txt"):
+            self.draw_rewards_history()
+
+        if self.testing == 1:
+            if not done:
+                self.test_guesses_list.append(action)
+            if done:
+                self.test_guesses_list.append(action)
+                self.test_log[str(self.target)] = self.test_guesses_list
+                self.test_guesses_list = []
+
         return self.observation, reward, done, {}
 
     def reset(self):
+        if os.path.exists("C:\\Users\Bartek\\Desktop\\gyms\\gym-mastermind\\gym_mastermind\\envs\\generate_txt.txt"):
+            #print("podaj po kolei wszystkie kombinacje i wyrzuć je jako output do pliku")
+            #print("w sumie to weź je streść elegancko do słownika i na jego podstawie licz %")
+            self.testing = 1
+
         self.guesses_list.append(self.guess_count)
         self.target = self.generate_code()
-        logger.debug("TARGET: %s", self.target)
+        ## #logger.debug("TARGET: %s", self.target)
         self.guess_count = 0
         self.interval = 0
         # Creating empty observation
         self.observation = []
-        #self.observation.append(0)  # current step
+        self.observation.append(0)  # current step
         self.actions_tried_this_epizode = []
 
-        """
         # dodawanie miejsc na akcję w obserwacji:
         for slot in range(self.number_of_digits_in_action):
-            self.observation.append(0
-        """
+            self.observation.append(0)
+
         for peg in range(self.amount_of_possible_binary_feedback_pegs):
             self.observation.append(0)
         return self.observation
 
-    def draw_rewards_history(self, reward):
+    def push_reward_to_list(self, reward):
         if len(self.recent_rewards_history) > self.amount_of_recent_rewards_in_history:
-            self.recent_rewards_history = self.recent_rewards_history[1:]
+            self.recent_rewards_history.pop(0)
         self.recent_rewards_history.append(reward*self.guess_count)
-        self.recent_mean_rewards_history.append(sum(self.recent_rewards_history) / len(self.recent_rewards_history))
+        a = np.array(self.recent_rewards_history)
+        self.recent_mean_rewards_history.append(np.mean(a))
 
-        if self.counter % self.co_ile_steps_wykres_nagrod == 0:
-            plt.plot(self.recent_mean_rewards_history[::300])
-            plt.axline((0, 25), (600, 25), alpha = 0.6)
-            plt.ylim(-50*self.GUESS_MAX/4, 80)
-            plt.pause(0.000001)
+    def draw_rewards_history(self):
+        plt.plot(self.recent_mean_rewards_history[::300])
+        plt.axline((0, 25), (600, 25), alpha = 0.6)
+        plt.ylim(-50, 110)
+        plt.grid()
+        plt.show()
 
 
 if __name__ == "__main__":
