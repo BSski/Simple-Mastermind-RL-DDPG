@@ -18,7 +18,7 @@ env.seed(1235)
 nb_actions = env.action_space.shape[0]
 
 # Hyperparameters settings.
-WINDOW_LENGTH = 7  # 6 was working fine, i just hope 5 will get results earlier
+WINDOW_LENGTH = 7
 GAMMA = 0.99
 BATCH_SIZE = 64
 MEMORY_SIZE = 500000
