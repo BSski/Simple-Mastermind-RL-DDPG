@@ -1,2 +1,2 @@
 # Simple-Mastermind-RL-DDPG
-21
+2
