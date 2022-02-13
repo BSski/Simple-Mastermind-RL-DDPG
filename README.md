@@ -1,2 +1,3 @@
-# Simple-Mastermind-RL-DDPG
-06.2021
+<b><h1 align="center">Simple Mastermind DDPG solver</h1></b>
+
+<hr>
