@@ -1,7 +1,0 @@
-README.md
-setup.py
-gym_mastermind.egg-info/PKG-INFO
-gym_mastermind.egg-info/SOURCES.txt
-gym_mastermind.egg-info/dependency_links.txt
-gym_mastermind.egg-info/requires.txt
-gym_mastermind.egg-info/top_level.txt
