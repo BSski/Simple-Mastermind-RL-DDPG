@@ -10,6 +10,12 @@
   <h2 align="center">Simple Mastermind DDPG solver</h2>
 </p>
 
+<div markdown="1" align="center">
+
+[![MIT License](https://img.shields.io/apm/l/atomic-design-ui.svg?)](https://github.com/BSski/Simple-Mastermind-RL-DDPG/blob/main/LICENSE)
+
+</div>
+
 
 ## Table of contents
 * [Project description](#scroll-project-description)
